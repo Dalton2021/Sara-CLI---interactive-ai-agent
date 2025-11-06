@@ -1,260 +1,126 @@
-# Sara - Terminal AI Assistant
+# Sara - AI Terminal Agent
 
-A terminal-based AI assistant powered by gpt-oss-20b, inspired by Claude Code. Sara provides an interactive chat interface directly in your terminal with conversation history, streaming responses, and beautiful formatting.
+Sara is your AI coding assistant in the terminal. She can read files, suggest corrections, answer coding questions, and help with various development tasks. Sara uses the qwen3-coder-30b model hosted via LM Studio.
 
 ## Features
 
-- 🚀 **Interactive Chat Mode**: Continuous conversation with context memory
-- 💬 **Streaming Responses**: See responses appear in real-time
-- 📝 **Conversation History**: Automatically saves and loads your chat history
-- 🎨 **Rich Formatting**: Beautiful markdown rendering in the terminal
-- 🔍 **Command History**: Navigate previous commands with arrow keys
-- ⚡ **Single Message Mode**: Send one-off queries without entering interactive mode
+- 🔍 **Context-Aware**: Automatically detects VS Code open files and workspace structure
+- 💬 **Interactive Mode**: Have conversations with Sara about your code
+- ⚡ **Streaming Responses**: Fast, real-time responses from your local LM Studio instance
+- 📁 **File Analysis**: Analyze specific files or entire repositories
+- 🎯 **Smart Context**: Intelligently gathers relevant files based on your query
+
+## Prerequisites
+
+- Python 3.8 or higher
+- LM Studio running locally at `http://127.0.0.1:1234`
+- qwen3-coder-30b model (or any other model) loaded in LM Studio
 
 ## Installation
 
-### Option 1: Install with pip (Recommended)
-
+1. Clone this repository or navigate to the Sara directory:
 ```bash
-# Clone or download the repository
-cd sara
+cd /Users/dalton/Documents/AI/Sara
+```
 
-# Install the package
+2. Install Sara:
+```bash
 pip install -e .
-
-# Or install directly
-pip install .
 ```
 
-### Option 2: Install from requirements
+This will install Sara and make it available as the `sara` command in your terminal.
 
+## Usage
+
+### One-Shot Questions
+Ask Sara a quick question:
 ```bash
-pip install -r requirements.txt
-chmod +x sara.py
-# Create a symlink or alias to use 'sara' command
+sara "What does this code do?"
+sara "How can I improve this function?"
 ```
 
-### Option 3: Run directly
+### Analyze a Specific File
+```bash
+sara "Review this file for bugs" --file script.py
+sara "Explain what this file does" -f main.py
+```
+
+### Interactive Mode
+Start a conversation with Sara:
+```bash
+sara --interactive
+# or
+sara -i
+```
+
+In interactive mode, you can have back-and-forth conversations. Type `exit` or `quit` to leave.
+
+### Skip Context Gathering
+If you want a faster response without context:
+```bash
+sara "What is a closure in JavaScript?" --no-context
+```
+
+## How It Works
+
+Sara gathers context from:
+1. **VS Code open files** - Detects files you currently have open
+2. **Workspace structure** - Understands your project layout
+3. **Relevant files** - Finds files related to your query
+4. **Specific files** - Analyzes files you explicitly specify
+
+This context is sent to your local LM Studio instance, where the qwen3-coder-30b model generates helpful responses.
+
+## Examples
 
 ```bash
-pip install openai prompt-toolkit rich
-python sara.py
+# General coding question
+sara "What's the difference between let and const in JavaScript?"
+
+# Code review
+sara "Review this file for security issues" --file api/auth.py
+
+# Debug help
+sara "Why might this function be causing a memory leak?" -f components/DataGrid.tsx
+
+# Interactive debugging session
+sara -i
+> I'm getting a TypeError in my React component
+> Can you help me understand why?
 ```
 
 ## Configuration
 
-Sara needs an API key to communicate with the gpt-oss-20b model. Set your API credentials:
+Sara uses these defaults:
+- LM Studio URL: `http://127.0.0.1:1234`
+- Temperature: `0.7`
+- Max context files: `3`
+- Max file lines: `1000`
 
-```bash
-# Set your API key
-export OPENAI_API_KEY="your-api-key-here"
-
-# If using a custom API endpoint (optional)
-export OPENAI_API_BASE="https://your-custom-endpoint.com/v1"
-```
-
-For persistent configuration, add these to your `~/.bashrc`, `~/.zshrc`, or equivalent:
-
-```bash
-echo 'export OPENAI_API_KEY="your-api-key-here"' >> ~/.bashrc
-source ~/.bashrc
-```
-
-## Usage
-
-### Interactive Mode
-
-Simply run `sara` to start an interactive session:
-
-```bash
-sara
-```
-
-You'll enter a chat interface where you can have ongoing conversations:
-
-```
-┌────────────────────────────────────────┐
-│ Sara AI Assistant                      │
-│ Powered by gpt-oss-20b                 │
-│                                        │
-│ Commands:                              │
-│   /clear  - Clear conversation history │
-│   /exit   - Exit Sara                  │
-│   /help   - Show this help message     │
-└────────────────────────────────────────┘
-
-You: Hello! Can you help me with Python?
-Sara: Of course! I'd be happy to help you with Python...
-```
-
-### Interactive Commands
-
-While in interactive mode, you can use these commands:
-
-- `/clear` - Clear the conversation history
-- `/exit` or `/quit` - Exit Sara
-- `/help` - Show help information
-- `Ctrl+C` or `Ctrl+D` - Quick exit
-
-### Single Message Mode
-
-Send a single message and get a response without entering interactive mode:
-
-```bash
-sara -m "What is the capital of France?"
-sara --message "Explain async/await in Python"
-```
-
-### Command Line Options
-
-```bash
-sara --help                           # Show help
-sara --api-key YOUR_KEY              # Provide API key directly
-sara --api-base https://custom.com   # Use custom API endpoint
-sara -m "your message"               # Send single message
-sara --no-stream                     # Disable streaming (show complete response)
-sara --clear                         # Clear conversation history and exit
-```
-
-## Examples
-
-### Example 1: Quick Question
-
-```bash
-$ sara -m "How do I reverse a list in Python?"
-Sara: There are several ways to reverse a list in Python:
-
-1. Using slicing: `reversed_list = my_list[::-1]`
-2. Using reverse() method: `my_list.reverse()` (modifies in place)
-3. Using reversed(): `reversed_list = list(reversed(my_list))`
-```
-
-### Example 2: Interactive Coding Help
-
-```bash
-$ sara
-
-You: I need to parse a JSON file in Python. Can you show me how?
-
-Sara: Here's how to parse a JSON file in Python:
-
-```python
-import json
-
-# Reading from a file
-with open('data.json', 'r') as file:
-    data = json.load(file)
-    print(data)
-```
-
-You: What if the JSON is invalid?
-
-Sara: You should use try-except to handle potential errors:
-...
-```
-
-### Example 3: Custom API Endpoint
-
-```bash
-# Use a different API endpoint
-sara --api-base https://your-custom-endpoint.com/v1 --api-key your-key
-```
-
-## File Structure
-
-```
-sara/
-├── sara.py              # Main application
-├── setup.py             # Package installation configuration
-├── requirements.txt     # Python dependencies
-├── README.md           # This file
-└── ~/.sara/            # User data directory (created automatically)
-    ├── history         # Command history
-    └── conversation.json  # Saved conversation
-```
-
-## Configuration Directory
-
-Sara stores data in `~/.sara/`:
-- `history` - Command-line history for autocomplete
-- `conversation.json` - Your conversation history (persists between sessions)
+To modify these, edit the values in `sara/cli.py` and `sara/llm_client.py`.
 
 ## Troubleshooting
 
-### "API key not found" error
-Make sure you've set the `OPENAI_API_KEY` environment variable:
-```bash
-export OPENAI_API_KEY="your-key"
-```
+**"Cannot connect to LM Studio"**
+- Ensure LM Studio is running
+- Check that the server is started (green play button in LM Studio)
+- Verify the URL is `http://127.0.0.1:1234`
 
-### Import errors
-Install the required dependencies:
-```bash
-pip install -r requirements.txt
-```
+**"No context gathered"**
+- Sara will fall back to repository scanning if VS Code files aren't detected
+- Make sure you're in a directory with code files
 
-### Permission denied
-Make the script executable:
-```bash
-chmod +x sara.py
-```
+**Slow responses**
+- Use `--no-context` for faster responses without file context
+- Reduce max_files in the configuration
 
-### Custom model
-If you're using a different model name, modify the `model` parameter in `sara.py`:
-```python
-model="your-model-name"
-```
+## Development
 
-## Customization
-
-You can customize Sara by editing `sara.py`:
-
-- **Model**: Change the model name (line ~89)
-- **Temperature**: Adjust response creativity (line ~91)
-- **Max tokens**: Change response length (line ~92)
-- **Colors**: Modify the Rich console styling
-- **System prompt**: Add a system message to the conversation history
-
-## Tips
-
-1. **Context Awareness**: Sara remembers your conversation within a session and across sessions
-2. **Clear when needed**: Use `/clear` to start fresh if the context gets too long
-3. **Arrow keys**: Use ↑ and ↓ to navigate through your command history
-4. **Tab completion**: The prompt-toolkit provides helpful autosuggestions
-5. **Markdown**: Sara's responses support markdown formatting for better readability
-
-## Requirements
-
-- Python 3.8 or higher
-- OpenAI-compatible API endpoint with gpt-oss-20b access
-- Terminal with ANSI color support (most modern terminals)
+To modify Sara:
+1. Edit files in the `sara/` directory
+2. Test changes: `python -m sara.cli "test query"`
+3. Reinstall: `pip install -e .`
 
 ## License
 
-MIT License - feel free to modify and distribute as needed.
-
-## Contributing
-
-Contributions are welcome! Feel free to submit issues or pull requests.
-
-## Comparison to Claude Code
-
-While inspired by Claude Code, Sara is:
-- Lighter weight and easier to customize
-- Focused on general chat rather than coding workflows
-- Compatible with any OpenAI-compatible API
-- Simple to understand and modify
-
-## Future Improvements
-
-Potential enhancements:
-- Multi-modal support (images, files)
-- Tool/function calling
-- Export conversations to various formats
-- Multiple conversation threads
-- Integration with local file system for context
-- Plugin system for extensions
-
----
-
-Made with ❤️ for terminal enthusiasts
+MIT

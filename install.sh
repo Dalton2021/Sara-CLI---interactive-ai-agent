@@ -1,77 +1,47 @@
 #!/bin/bash
-
-# Sara Installation Script
-# This script installs Sara and sets it up for terminal use
+# Installation script for Sara AI Terminal Agent
 
 set -e
 
-echo "======================================"
-echo "  Sara AI Assistant Installer"
-echo "======================================"
+echo "🤖 Installing Sara AI Terminal Agent..."
 echo ""
 
-# Check if Python is installed
+# Check Python version
 if ! command -v python3 &> /dev/null; then
-    echo "❌ Python 3 is not installed. Please install Python 3.8 or higher."
+    echo "❌ Python 3 is required but not found."
+    echo "Please install Python 3.8 or higher."
     exit 1
 fi
 
-PYTHON_VERSION=$(python3 --version | cut -d' ' -f2)
+PYTHON_VERSION=$(python3 --version | cut -d' ' -f2 | cut -d'.' -f1,2)
 echo "✓ Found Python $PYTHON_VERSION"
 
-# Check if pip is installed
-if ! command -v pip3 &> /dev/null; then
-    echo "❌ pip3 is not installed. Please install pip."
-    exit 1
+# Check if pipx is available
+if ! command -v pipx &> /dev/null; then
+    echo "❌ pipx is required but not found."
+    echo "Installing pipx..."
+    brew install pipx
 fi
 
-echo "✓ Found pip3"
+echo "✓ Found pipx"
 echo ""
 
-# Install dependencies
-echo "📦 Installing dependencies..."
-pip3 install -r requirements.txt
+# Install Sara in development mode
+echo "📦 Installing Sara and dependencies..."
+pipx install -e .
 
 echo ""
-echo "✓ Dependencies installed"
+echo "✅ Sara has been installed successfully!"
 echo ""
-
-# Install the package
-echo "📦 Installing Sara..."
-pip3 install -e .
-
+echo "🎯 Quick Start:"
+echo "  1. Make sure LM Studio is running at http://127.0.0.1:1234"
+echo "  2. Load the qwen3-coder-30b model (or any other model)"
+echo "  3. Run: sara --interactive"
 echo ""
-echo "✓ Sara installed successfully!"
+echo "📖 Examples:"
+echo "  sara \"What does this code do?\""
+echo "  sara \"Review this file\" --file script.py"
+echo "  sara -i  # Start interactive mode"
 echo ""
-
-# Check if API key is set
-if [ -z "$OPENAI_API_KEY" ]; then
-    echo "⚠️  Warning: OPENAI_API_KEY environment variable is not set."
-    echo ""
-    echo "To use Sara, you need to set your API key:"
-    echo ""
-    echo "  export OPENAI_API_KEY='your-api-key-here'"
-    echo ""
-    echo "Add this to your ~/.bashrc or ~/.zshrc to make it permanent:"
-    echo ""
-    echo "  echo 'export OPENAI_API_KEY=\"your-api-key-here\"' >> ~/.bashrc"
-    echo "  source ~/.bashrc"
-    echo ""
-else
-    echo "✓ OPENAI_API_KEY is set"
-    echo ""
-fi
-
-echo "======================================"
-echo "  Installation Complete!"
-echo "======================================"
+echo "💡 Need help? Run: sara --help"
 echo ""
-echo "You can now use Sara by typing:"
-echo ""
-echo "  sara"
-echo ""
-echo "For help, use:"
-echo ""
-echo "  sara --help"
-echo ""
-echo "Enjoy chatting with Sara! 🎉"
