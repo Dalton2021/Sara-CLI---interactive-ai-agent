@@ -4,11 +4,12 @@ Sara is your AI coding assistant in the terminal. She can read files, suggest co
 
 ## Features
 
-- 🔍 **Context-Aware**: Automatically detects VS Code open files and workspace structure
+- 🔍 **Context-Aware**: With the VS Code extension, Sara sees exactly which files you have open
 - 💬 **Interactive Mode**: Have conversations with Sara about your code
 - ⚡ **Streaming Responses**: Fast, real-time responses from your local LM Studio instance
 - 📁 **File Analysis**: Analyze specific files or entire repositories
 - 🎯 **Smart Context**: Intelligently gathers relevant files based on your query
+- 🎨 **VS Code Integration**: Commands and shortcuts to invoke Sara directly from your editor
 
 ## Prerequisites
 
@@ -29,6 +30,25 @@ pip install -e .
 ```
 
 This will install Sara and make it available as the `sara` command in your terminal.
+
+## VS Code Extension (Recommended!)
+
+For the best experience, install the Sara VS Code extension. This gives Sara the same context awareness as Claude Code - she'll know which files you have open!
+
+```bash
+# From the Sara directory
+cp -r vscode-extension ~/.vscode/extensions/sara-context-provider
+```
+
+Then reload VS Code (`Cmd+Shift+P` → "Developer: Reload Window").
+
+**See [INSTALL_EXTENSION.md](INSTALL_EXTENSION.md) for detailed instructions.**
+
+With the extension installed, Sara automatically sees:
+- ✅ Your currently active file
+- ✅ All open tabs
+- ✅ Workspace structure
+- ✅ Updates in real-time
 
 ## Usage
 

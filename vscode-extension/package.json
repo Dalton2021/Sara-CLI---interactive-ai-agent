@@ -1,0 +1,36 @@
+{
+  "name": "sara-context-provider",
+  "displayName": "Sara Context Provider",
+  "description": "Provides file context to Sara AI assistant",
+  "version": "0.1.0",
+  "publisher": "sara",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "sara.askAboutFile",
+        "title": "Sara: Ask About Current File"
+      },
+      {
+        "command": "sara.interactive",
+        "title": "Sara: Start Interactive Session"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "sara.askAboutFile",
+        "key": "ctrl+shift+s",
+        "mac": "cmd+shift+s"
+      }
+    ]
+  }
+}

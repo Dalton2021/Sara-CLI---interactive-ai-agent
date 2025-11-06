@@ -34,9 +34,14 @@ You have been given context about the user's current workspace and files. Use th
 Be concise but thorough. Format your responses in markdown when appropriate. If you're suggesting code changes, show the specific lines that need modification."""
 
 
-def gather_context(query: str, specific_file: str = None) -> str:
-    """Gather context from VS Code and file system"""
+def gather_context(query: str, specific_file: str = None) -> tuple[str, bool]:
+    """Gather context from VS Code and file system
+
+    Returns:
+        tuple: (context_string, has_vscode_context)
+    """
     context_parts = []
+    has_vscode = VSCodeContext.has_extension_running()
 
     # Get workspace root
     workspace_root = VSCodeContext.get_workspace_root()
@@ -50,17 +55,29 @@ def gather_context(query: str, specific_file: str = None) -> str:
         else:
             context_parts.append(f"\nNote: Specified file '{specific_file}' not found.\n")
 
-    # Try to get open files from VS Code
+    # Try to get active file from VS Code (prioritize this!)
+    active_file = VSCodeContext.get_active_file()
+    if active_file and os.path.exists(active_file):
+        content = VSCodeContext.read_file_content(active_file, max_lines=500)
+        context_parts.append(f"\n## Active File in VS Code: {active_file}\n```\n{content}\n```\n")
+
+    # Get other open files from VS Code
     open_files = VSCodeContext.get_open_files()
 
+    # Filter out the active file from open files list
+    if active_file and open_files:
+        open_files = [f for f in open_files if f != active_file]
+
     if open_files:
-        context_parts.append("\n## Currently Open Files in VS Code:\n")
-        for file_path in open_files[:3]:  # Limit to 3 files
+        context_parts.append("\n## Other Open Files in VS Code:\n")
+        for file_path in open_files[:3]:  # Limit to 3 additional files
             if os.path.exists(file_path):
                 content = VSCodeContext.read_file_content(file_path, max_lines=200)
-                context_parts.append(f"\n### {file_path}\n```\n{content}\n```\n")
-    else:
-        # Fallback: Get directory structure and relevant files
+                relative_path = os.path.basename(file_path)
+                context_parts.append(f"\n### {relative_path}\n```\n{content}\n```\n")
+
+    # If no VS Code context, fall back to file scanning
+    if not has_vscode:
         context_parts.append("\n## Repository Structure:\n")
         structure = FileContext.get_directory_structure(workspace_root, max_depth=2)
         context_parts.append(structure)
@@ -75,7 +92,7 @@ def gather_context(query: str, specific_file: str = None) -> str:
                     content = content[:3000] + "\n... (truncated)"
                 context_parts.append(f"\n### {file_path}\n```\n{content}\n```\n")
 
-    return ''.join(context_parts)
+    return ''.join(context_parts), has_vscode
 
 
 @click.command()
@@ -128,9 +145,12 @@ def main(query, file, no_context, interactive):
 
                 # Gather context only for first message or on request
                 context = ""
+                has_vscode = False
                 if len(conversation_history) == 0:
                     console.print("[dim]Gathering context...[/dim]")
-                    context = gather_context(user_input, file)
+                    context, has_vscode = gather_context(user_input, file)
+                    if not has_vscode:
+                        console.print("[dim yellow]💡 Tip: Install the Sara VS Code extension for better context awareness![/dim yellow]")
 
                 # Build messages
                 messages = [{"role": "system", "content": build_system_prompt()}]
@@ -170,9 +190,13 @@ def main(query, file, no_context, interactive):
 
         # Gather context
         context = ""
+        has_vscode = False
         if not no_context:
             with console.status("[cyan]Gathering context...[/cyan]", spinner="dots"):
-                context = gather_context(query_text, file)
+                context, has_vscode = gather_context(query_text, file)
+
+            if not has_vscode:
+                console.print("[dim yellow]💡 Tip: Install the Sara VS Code extension for better context awareness![/dim yellow]\n")
 
         # Build messages
         messages = [
