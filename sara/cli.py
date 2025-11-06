@@ -252,9 +252,9 @@ def main(query, file, no_context, interactive):
     """Sara - AI Terminal Agent for Code Assistance
 
     Examples:
+        sara                    # Start interactive mode (default)
         sara "What does this code do?"
         sara "How can I optimize this function?" --file script.py
-        sara --interactive
     """
     # Initialize LM Studio client
     client = LMStudioClient()
@@ -269,6 +269,10 @@ def main(query, file, no_context, interactive):
             border_style="red"
         ))
         sys.exit(1)
+
+    # Default to interactive mode if no query provided
+    if not query and not interactive:
+        interactive = True
 
     # Interactive mode
     if interactive:

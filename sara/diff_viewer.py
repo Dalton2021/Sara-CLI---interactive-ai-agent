@@ -2,11 +2,9 @@
 import sys
 import tty
 import termios
-from typing import Optional, Callable
+from typing import Optional
 from rich.console import Console
 from rich.panel import Panel
-from rich.syntax import Syntax
-from rich.text import Text
 
 from .code_editor import CodeChange
 
@@ -25,58 +23,98 @@ class DiffViewer:
             'deny' - skip this change
             'adjust' - deny and ask for adjustments
         """
-        self.console.print()
+        # Read the file to get line numbers
+        try:
+            with open(change.file_path, 'r', encoding='utf-8') as f:
+                file_content = f.read()
+        except Exception:
+            file_content = ""
 
-        # Get file extension for syntax highlighting
-        file_ext = change.file_path.split('.')[-1] if '.' in change.file_path else 'txt'
-        language_map = {
-            'py': 'python', 'js': 'javascript', 'ts': 'typescript',
-            'html': 'html', 'css': 'css', 'json': 'json',
-            'java': 'java', 'cpp': 'cpp', 'c': 'c', 'go': 'go',
-            'rs': 'rust', 'rb': 'ruby', 'php': 'php'
-        }
-        language = language_map.get(file_ext, 'text')
+        # Find the position in the file
+        if change.old_code in file_content:
+            lines_before = file_content[:file_content.find(change.old_code)].count('\n')
+            start_line = lines_before + 1
+        else:
+            start_line = 1
 
-        # Create side-by-side display
-        from rich.columns import Columns
-        from rich.table import Table
-
-        # Create table for side-by-side diff
-        table = Table(title=f"Proposed Change to: {change.file_path}",
-                     title_style="bold cyan",
-                     show_header=True,
-                     header_style="bold",
-                     border_style="cyan",
-                     expand=True)
-
-        table.add_column("OLD", style="red", no_wrap=False, ratio=1)
-        table.add_column("NEW", style="green", no_wrap=False, ratio=1)
-
-        # Split into lines and show side by side
+        # Count additions and removals
         old_lines = change.old_code.split('\n')
         new_lines = change.new_code.split('\n')
 
-        # Pad the shorter one
-        max_lines = max(len(old_lines), len(new_lines))
-        old_lines += [''] * (max_lines - len(old_lines))
-        new_lines += [''] * (max_lines - len(new_lines))
+        additions = 0
+        removals = 0
 
-        # Add lines with highlighting for differences
-        for old_line, new_line in zip(old_lines, new_lines):
-            if old_line != new_line:
-                # Lines are different - highlight them
-                table.add_row(
-                    f"[red]{old_line}[/red]" if old_line else "",
-                    f"[green]{new_line}[/green]" if new_line else ""
-                )
-            else:
-                # Lines are the same - show in dim
-                table.add_row(
-                    f"[dim]{old_line}[/dim]",
-                    f"[dim]{new_line}[/dim]"
-                )
+        import difflib
+        matcher = difflib.SequenceMatcher(None, old_lines, new_lines)
+        for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+            if tag == 'delete':
+                removals += i2 - i1
+            elif tag == 'insert':
+                additions += j2 - j1
+            elif tag == 'replace':
+                removals += i2 - i1
+                additions += j2 - j1
 
-        self.console.print(table)
+        # Header
+        self.console.print()
+        self.console.print(f"[bold]⏺ Update({change.file_path})[/bold]")
+        self.console.print(f"  ⎿  Updated {change.file_path} with {additions} addition{'s' if additions != 1 else ''} and {removals} removal{'s' if removals != 1 else ''}")
+
+        # Show diff with line numbers
+        self.console.print()
+
+        current_old_line = start_line
+        current_new_line = start_line
+
+        # Generate diff
+        for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+            if tag == 'equal':
+                # Show context (unchanged lines)
+                for i in range(i1, min(i1 + 2, i2)):  # Show up to 2 context lines
+                    line = old_lines[i]
+                    self.console.print(f"     {current_old_line:>6}    {line}")
+                    current_old_line += 1
+                    current_new_line += 1
+
+                # Skip middle lines if there are many
+                if i2 - i1 > 4:
+                    current_old_line += (i2 - i1 - 3)
+                    current_new_line += (i2 - i1 - 3)
+
+                # Show last context lines
+                for i in range(max(i2 - 1, i1), i2):
+                    if i >= i1 + 2:  # Only if we didn't already show it
+                        line = old_lines[i]
+                        self.console.print(f"     {current_old_line:>6}    {line}")
+                        current_old_line += 1
+                        current_new_line += 1
+
+            elif tag == 'delete':
+                # Removed lines
+                for i in range(i1, i2):
+                    line = old_lines[i]
+                    self.console.print(f"     {current_old_line:>6} [black on red]-[/black on red]  [black on red]{line}[/black on red]")
+                    current_old_line += 1
+
+            elif tag == 'insert':
+                # Added lines
+                for j in range(j1, j2):
+                    line = new_lines[j]
+                    self.console.print(f"     {current_new_line:>6} [black on green]+[/black on green]  [black on green]{line}[/black on green]")
+                    current_new_line += 1
+
+            elif tag == 'replace':
+                # Replaced lines (show as delete + insert)
+                for i in range(i1, i2):
+                    line = old_lines[i]
+                    self.console.print(f"     {current_old_line:>6} [black on red]-[/black on red]  [black on red]{line}[/black on red]")
+                    current_old_line += 1
+                for j in range(j1, j2):
+                    line = new_lines[j]
+                    self.console.print(f"     {current_new_line:>6} [black on green]+[/black on green]  [black on green]{line}[/black on green]")
+                    current_new_line += 1
+
+        self.console.print()
 
         # Interactive menu
         return self._show_menu()
@@ -91,46 +129,47 @@ class DiffViewer:
 
         selected = 0
 
-        self.console.print()
         self.console.print("[dim]Use ↑/↓ arrows to navigate, Enter to select, or press c/d/a[/dim]")
         self.console.print()
-
-        def render_menu():
-            # Move cursor up to redraw menu
-            for i, (action, label, color) in enumerate(options):
-                if i == selected:
-                    self.console.print(f"[bold {color}]→ {label}[/bold {color}]")
-                else:
-                    self.console.print(f"[dim]  {label}[/dim]")
-
-        # Initial render
-        render_menu()
 
         # Get original terminal settings
         fd = sys.stdin.fileno()
         old_settings = termios.tcgetattr(fd)
 
         try:
-            # Set terminal to raw mode for reading single characters
-            tty.setraw(fd)
+            # Set terminal to cbreak mode
+            tty.setcbreak(fd)
+
+            # Initial render
+            for i, (action, label, color) in enumerate(options):
+                if i == selected:
+                    self.console.print(f"[bold {color}]→ {label}[/bold {color}]")
+                else:
+                    self.console.print(f"[dim]  {label}[/dim]")
 
             while True:
                 # Read a character
                 char = sys.stdin.read(1)
 
-                # Move cursor up to redraw menu
                 if char == '\x1b':  # Escape sequence
                     next_chars = sys.stdin.read(2)
                     if next_chars == '[A':  # Up arrow
                         selected = (selected - 1) % len(options)
-                        # Clear previous menu
-                        self.console.print(f"\033[{len(options)}A", end="")
-                        render_menu()
                     elif next_chars == '[B':  # Down arrow
                         selected = (selected + 1) % len(options)
-                        # Clear previous menu
-                        self.console.print(f"\033[{len(options)}A", end="")
-                        render_menu()
+                    else:
+                        continue
+
+                    # Clear and redraw menu
+                    sys.stdout.write(f"\033[{len(options)}A")  # Move cursor up
+                    for i, (action, label, color) in enumerate(options):
+                        sys.stdout.write("\033[2K")  # Clear line
+                        if i == selected:
+                            sys.stdout.write(f"\033[1;3{self._color_code(color)}m→ {label}\033[0m\n")
+                        else:
+                            sys.stdout.write(f"\033[2m  {label}\033[0m\n")
+                    sys.stdout.flush()
+
                 elif char == '\r' or char == '\n':  # Enter
                     break
                 elif char.lower() == 'c':  # Shortcut for confirm
@@ -161,6 +200,11 @@ class DiffViewer:
 
         return action
 
+    def _color_code(self, color: str) -> int:
+        """Get ANSI color code"""
+        colors = {'green': 2, 'red': 1, 'yellow': 3}
+        return colors.get(color, 7)
+
     def show_simple_confirmation(self, message: str) -> bool:
         """Show a simple yes/no confirmation"""
         self.console.print(f"\n{message}")
@@ -170,7 +214,7 @@ class DiffViewer:
         old_settings = termios.tcgetattr(fd)
 
         try:
-            tty.setraw(fd)
+            tty.setcbreak(fd)
             while True:
                 char = sys.stdin.read(1).lower()
                 if char == 'y':
