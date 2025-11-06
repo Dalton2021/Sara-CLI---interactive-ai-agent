@@ -4,12 +4,14 @@ Sara is your AI coding assistant in the terminal. She can read files, suggest co
 
 ## Features
 
+- ✏️ **Code Editing**: Sara can make changes to your code with interactive confirmation (just like Claude Code!)
 - 🔍 **Context-Aware**: With the VS Code extension, Sara sees exactly which files you have open
 - 💬 **Interactive Mode**: Have conversations with Sara about your code
 - ⚡ **Streaming Responses**: Fast, real-time responses from your local LM Studio instance
 - 📁 **File Analysis**: Analyze specific files or entire repositories
 - 🎯 **Smart Context**: Intelligently gathers relevant files based on your query
 - 🎨 **VS Code Integration**: Commands and shortcuts to invoke Sara directly from your editor
+- 🔄 **Interactive Diffs**: Preview changes before applying, with keyboard navigation
 
 ## Prerequisites
 
@@ -80,6 +82,28 @@ If you want a faster response without context:
 ```bash
 sara "What is a closure in JavaScript?" --no-context
 ```
+
+## Code Editing (NEW!)
+
+Sara can now make changes to your code files with interactive confirmation! When she suggests changes, you'll see a diff and can choose:
+
+- ✓ **Apply this change** - Sara modifies the file
+- ✗ **Skip this change** - Leave the file unchanged
+- ✎ **Deny and request adjustments** - Provide feedback and Sara will revise
+
+### Example
+
+```bash
+sara "fix the bug in this file"
+```
+
+Sara will:
+1. Analyze the code and identify the issue
+2. Show you a diff of the proposed fix
+3. Wait for your confirmation
+4. Apply the change when you approve
+
+**See [CODE_CHANGES.md](CODE_CHANGES.md) for detailed documentation.**
 
 ## How It Works
 

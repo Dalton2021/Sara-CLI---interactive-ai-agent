@@ -3,6 +3,7 @@ import sys
 import os
 from pathlib import Path
 import click
+import textwrap
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
@@ -12,26 +13,97 @@ from rich.spinner import Spinner
 from .llm_client import LMStudioClient
 from .vscode_context import VSCodeContext
 from .file_context import FileContext
+from .code_editor import CodeEditor, CodeChange
+from .diff_viewer import DiffViewer
 
 
 console = Console()
 
-
 def build_system_prompt() -> str:
     """Build Sara's system prompt - she behaves like Claude Code"""
-    return """You are Sara, an AI coding assistant. You are helpful, knowledgeable, and friendly.
+    return textwrap.dedent('''\
+    You are Sara, an AI coding assistant. You are helpful, knowledgeable, and friendly.
 
-Your role is to:
-- Read and analyze code
-- Suggest improvements and corrections
-- Answer coding questions
-- Help debug issues
-- Explain code concepts
-- Provide best practices
+    Your role is to:
+    - Read and analyze code
+    - Suggest improvements and corrections
+    - Answer coding questions
+    - Help debug issues
+    - Explain code concepts
+    - Provide best practices
+    - Make code changes directly to files
 
-You have been given context about the user's current workspace and files. Use this context to provide relevant, specific assistance.
+    You have been given context about the user's current workspace and files. Use this context to provide relevant, specific assistance.
 
-Be concise but thorough. Format your responses in markdown when appropriate. If you're suggesting code changes, show the specific lines that need modification."""
+    ## Making Code Changes
+
+    When you want to make changes to a file, use this EXACT format:
+
+    OLD:
+    ```
+    the exact code to replace
+    ```
+    NEW:
+    ```
+    the new code
+    ```
+
+    CRITICAL RULES FOR MAKING CHANGES:
+    1. **BE SURGICAL** - Show ONLY the lines that need to change, plus 1-2 lines of context
+    2. **NEVER replace entire files** - Only show the specific section that needs modification
+    3. **Keep it minimal** - For a missing semicolon or tag, show just 2-3 lines, not 50+
+    4. **Match exactly** - The OLD code must match what's in the file (check spacing/indentation)
+    5. **Include context** - Add 1-2 lines before/after so the change location is unique
+    6. **Multiple changes** - Show each change separately, don't combine distant changes
+
+    Good Example (fixing missing closing tag):
+    "I found it! Line 72 is missing a closing </p> tag:
+
+    OLD:
+    ```html
+        <p>Authentic Italian Pizza Made Fresh Daily!
+      </header>
+    ```
+    NEW:
+    ```html
+        <p>Authentic Italian Pizza Made Fresh Daily!</p>
+      </header>
+    ```
+    "
+
+    Bad Example (replacing entire file):
+    OLD:
+    ```html
+    <!DOCTYPE html>
+    <html>
+    ... entire 100 line file ...
+    </html>
+    ```
+    This is way too much! Be surgical.
+
+    Another Good Example (Python function fix):
+    "The function crashes on empty lists. Let me add a check:
+
+    OLD:
+    ```python
+    def calculate_average(numbers):
+        """Calculate the average of a list of numbers"""
+        total = 0
+    ```
+    NEW:
+    ```python
+    def calculate_average(numbers):
+        """Calculate the average of a list of numbers"""
+        if not numbers:
+            return 0
+        total = 0
+    ```
+    "
+
+    The user will be shown a side-by-side diff and can confirm, deny, or request adjustments.
+
+    Be concise but thorough. Format your responses in markdown when appropriate.
+    ''')
 
 
 def gather_context(query: str, specific_file: str = None) -> tuple[str, bool]:
@@ -93,6 +165,82 @@ def gather_context(query: str, specific_file: str = None) -> tuple[str, bool]:
                 context_parts.append(f"\n### {file_path}\n```\n{content}\n```\n")
 
     return ''.join(context_parts), has_vscode
+
+
+def process_response_for_changes(response: str, active_file: str = None) -> tuple[str, list[CodeChange]]:
+    """Process Sara's response and extract any code changes
+
+    Returns:
+        (clean_response, changes)
+    """
+    # Extract changes from response
+    changes = CodeEditor.extract_changes(response, active_file)
+
+    # For now, return the full response (we'll show it before the diff)
+    return response, changes
+
+
+def handle_code_changes(changes: list[CodeChange], conversation_history: list = None) -> tuple[bool, str]:
+    """Handle code changes with interactive confirmation
+
+    Returns:
+        (all_applied, feedback) - feedback is None unless user wants adjustments
+    """
+    if not changes:
+        return True, None
+
+    diff_viewer = DiffViewer(console)
+    applied_changes = []
+    feedback_messages = []
+
+    for i, change in enumerate(changes):
+        console.print(f"\n[cyan bold]Change {i+1} of {len(changes)}[/cyan bold]")
+
+        # Validate the change
+        is_valid, error_msg = CodeEditor.validate_change(change)
+        if not is_valid:
+            console.print(f"[red]✗ Cannot apply change: {error_msg}[/red]")
+            console.print("[yellow]Tip: Ask Sara to show less code (just the lines that need to change)[/yellow]")
+            feedback_messages.append(
+                f"The change to {change.file_path} failed: {error_msg}. "
+                "Please provide a smaller, more surgical change with just the exact lines from the file."
+            )
+            continue
+
+        # Show the change and get user decision
+        decision = diff_viewer.show_change(change)
+
+        if decision == "confirm":
+            # Apply the change
+            if change.apply():
+                applied_changes.append(change)
+                console.print(f"[green]✓ Successfully applied change to {change.file_path}[/green]")
+            else:
+                console.print(f"[red]✗ Failed to apply change to {change.file_path}[/red]")
+
+        elif decision == "deny":
+            console.print(f"[yellow]Skipped change to {change.file_path}[/yellow]")
+
+        elif decision == "adjust":
+            # User wants adjustments
+            console.print("\n[yellow]What adjustments would you like Sara to make?[/yellow]")
+            feedback = console.input("[bold cyan]Your feedback:[/bold cyan] ")
+            feedback_messages.append(f"For the change to {change.file_path}: {feedback}")
+
+    # If there's feedback (either from validation failures or user requests), return it
+    if feedback_messages:
+        all_feedback = "\n".join(feedback_messages)
+        console.print(f"\n[yellow]⚠ {len(feedback_messages)} issue(s) need to be addressed[/yellow]")
+        return False, all_feedback
+
+    # If we applied some changes, notify
+    if applied_changes:
+        console.print(f"\n[green bold]✓ Applied {len(applied_changes)} change(s)[/green bold]")
+    elif changes:
+        # Had changes but none were applied
+        console.print(f"\n[yellow]No changes were applied[/yellow]")
+
+    return True, None
 
 
 @click.command()
@@ -168,6 +316,48 @@ def main(query, file, no_context, interactive):
                     response_text += chunk
                 console.print()  # New line after response
 
+                # Check for code changes
+                active_file = VSCodeContext.get_active_file()
+                clean_response, changes = process_response_for_changes(response_text, active_file)
+
+                if changes:
+                    # Handle code changes with interactive confirmation
+                    all_applied, feedback = handle_code_changes(changes, conversation_history)
+
+                    if feedback:
+                        # User wants adjustments OR validation failed
+                        # Add feedback to conversation and get Sara to try again
+                        conversation_history.append({"role": "user", "content": user_input})
+                        conversation_history.append({"role": "assistant", "content": response_text})
+                        conversation_history.append({
+                            "role": "user",
+                            "content": (
+                                f"{feedback}\n\n"
+                                "Remember: Show ONLY the specific lines that need to change, "
+                                "plus 1-2 lines of context. Copy the EXACT code from the file."
+                            )
+                        })
+
+                        # Get Sara's adjusted response
+                        console.print("\n[cyan]Sara is revising her changes...[/cyan]\n")
+                        console.print("[bold green]Sara:[/bold green] ", end="")
+                        adjusted_response = ""
+                        for chunk in client.stream_chat([{"role": "system", "content": build_system_prompt()}] + conversation_history):
+                            console.print(chunk, end="")
+                            adjusted_response += chunk
+                        console.print()
+
+                        # Try to apply adjusted changes
+                        _, adjusted_changes = process_response_for_changes(adjusted_response, active_file)
+                        if adjusted_changes:
+                            all_applied, more_feedback = handle_code_changes(adjusted_changes, conversation_history)
+                            # If still having issues, give up after one retry to avoid loops
+                            if more_feedback:
+                                console.print("\n[yellow]Still having issues. You may need to make this change manually.[/yellow]")
+
+                        conversation_history.append({"role": "assistant", "content": adjusted_response})
+                        continue
+
                 # Add to history
                 conversation_history.append({"role": "user", "content": user_input})
                 conversation_history.append({"role": "assistant", "content": response_text})
@@ -210,10 +400,50 @@ def main(query, file, no_context, interactive):
 
         # Stream response
         console.print("\n[bold green]Sara:[/bold green] ", end="")
+        response_text = ""
         try:
             for chunk in client.stream_chat(messages):
                 console.print(chunk, end="")
+                response_text += chunk
             console.print("\n")
+
+            # Check for code changes
+            active_file = VSCodeContext.get_active_file()
+            clean_response, changes = process_response_for_changes(response_text, active_file)
+
+            if changes:
+                # Handle code changes with interactive confirmation
+                all_applied, feedback = handle_code_changes(changes)
+
+                if feedback:
+                    # User wants adjustments OR validation failed
+                    console.print("\n[cyan]Sara is revising her changes...[/cyan]\n")
+
+                    messages.append({"role": "assistant", "content": response_text})
+                    messages.append({
+                        "role": "user",
+                        "content": (
+                            f"{feedback}\n\n"
+                            "Remember: Show ONLY the specific lines that need to change, "
+                            "plus 1-2 lines of context. Copy the EXACT code from the file."
+                        )
+                    })
+
+                    # Get adjusted response
+                    console.print("[bold green]Sara:[/bold green] ", end="")
+                    adjusted_response = ""
+                    for chunk in client.stream_chat(messages):
+                        console.print(chunk, end="")
+                        adjusted_response += chunk
+                    console.print("\n")
+
+                    # Try to apply adjusted changes
+                    _, adjusted_changes = process_response_for_changes(adjusted_response, active_file)
+                    if adjusted_changes:
+                        all_applied, more_feedback = handle_code_changes(adjusted_changes)
+                        if more_feedback:
+                            console.print("\n[yellow]Still having issues. You may need to make this change manually.[/yellow]")
+
         except KeyboardInterrupt:
             console.print("\n\n[dim]Interrupted[/dim]")
             sys.exit(0)
