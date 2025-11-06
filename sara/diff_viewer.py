@@ -122,14 +122,14 @@ class DiffViewer:
     def _show_menu(self) -> str:
         """Show interactive menu with keyboard navigation"""
         options = [
-            ("confirm", "✓ Apply this change", "green"),
-            ("deny", "✗ Skip this change", "red"),
-            ("adjust", "✎ Deny and request adjustments", "yellow")
+            ("confirm", "Yes", "green"),
+            ("confirm_all", "Yes, allow all edits during this session", "green"),
+            ("adjust", "No, and tell Sara what to do differently", "yellow")
         ]
 
         selected = 0
 
-        self.console.print("[dim]Use ↑/↓ arrows to navigate, Enter to select, or press c/d/a[/dim]")
+        self.console.print("[dim]Use ↑/↓ arrows to navigate, Enter to select, or press 1/2/3[/dim]")
         self.console.print()
 
         # Get original terminal settings
@@ -143,9 +143,9 @@ class DiffViewer:
             # Initial render
             for i, (action, label, color) in enumerate(options):
                 if i == selected:
-                    self.console.print(f"[bold {color}]→ {label}[/bold {color}]")
+                    self.console.print(f" [bold {color}]❯ {i+1}. {label}[/bold {color}]")
                 else:
-                    self.console.print(f"[dim]  {label}[/dim]")
+                    self.console.print(f"[dim]   {i+1}. {label}[/dim]")
 
             while True:
                 # Read a character
@@ -165,20 +165,20 @@ class DiffViewer:
                     for i, (action, label, color) in enumerate(options):
                         sys.stdout.write("\033[2K")  # Clear line
                         if i == selected:
-                            sys.stdout.write(f"\033[1;3{self._color_code(color)}m→ {label}\033[0m\n")
+                            sys.stdout.write(f"\033[1;3{self._color_code(color)}m ❯ {i+1}. {label}\033[0m\n")
                         else:
-                            sys.stdout.write(f"\033[2m  {label}\033[0m\n")
+                            sys.stdout.write(f"\033[2m   {i+1}. {label}\033[0m\n")
                     sys.stdout.flush()
 
                 elif char == '\r' or char == '\n':  # Enter
                     break
-                elif char.lower() == 'c':  # Shortcut for confirm
+                elif char == '1':  # Shortcut for option 1
                     selected = 0
                     break
-                elif char.lower() == 'd':  # Shortcut for deny
+                elif char == '2':  # Shortcut for option 2
                     selected = 1
                     break
-                elif char.lower() == 'a':  # Shortcut for adjust
+                elif char == '3':  # Shortcut for option 3
                     selected = 2
                     break
                 elif char == '\x03':  # Ctrl+C
@@ -192,11 +192,11 @@ class DiffViewer:
         action = options[selected][0]
 
         if action == "confirm":
-            self.console.print("[green bold]✓ Change accepted[/green bold]")
-        elif action == "deny":
-            self.console.print("[red bold]✗ Change skipped[/red bold]")
+            self.console.print("[green bold]✓ Applying change[/green bold]")
+        elif action == "confirm_all":
+            self.console.print("[green bold]✓ Applying all changes[/green bold]")
         elif action == "adjust":
-            self.console.print("[yellow bold]✎ Requesting adjustments...[/yellow bold]")
+            self.console.print("[yellow bold]Requesting adjustments...[/yellow bold]")
 
         return action
 

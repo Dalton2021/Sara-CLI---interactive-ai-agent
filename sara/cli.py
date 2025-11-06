@@ -9,6 +9,8 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.live import Live
 from rich.spinner import Spinner
+from prompt_toolkit import PromptSession
+from prompt_toolkit.styles import Style
 
 from .llm_client import LMStudioClient
 from .vscode_context import VSCodeContext
@@ -18,6 +20,11 @@ from .diff_viewer import DiffViewer
 
 
 console = Console()
+
+# Style for the prompt
+prompt_style = Style.from_dict({
+    'prompt': 'bold cyan',
+})
 
 def build_system_prompt() -> str:
     """Build Sara's system prompt - she behaves like Claude Code"""
@@ -192,6 +199,7 @@ def handle_code_changes(changes: list[CodeChange], conversation_history: list = 
     diff_viewer = DiffViewer(console)
     applied_changes = []
     feedback_messages = []
+    auto_confirm = False  # Track if user selected "confirm all"
 
     for i, change in enumerate(changes):
         console.print(f"\n[cyan bold]Change {i+1} of {len(changes)}[/cyan bold]")
@@ -207,8 +215,12 @@ def handle_code_changes(changes: list[CodeChange], conversation_history: list = 
             )
             continue
 
-        # Show the change and get user decision
-        decision = diff_viewer.show_change(change)
+        # Show the change and get user decision (unless auto-confirming)
+        if auto_confirm:
+            decision = "confirm"
+            console.print(f"[green]✓ Auto-applying change to {change.file_path}[/green]")
+        else:
+            decision = diff_viewer.show_change(change)
 
         if decision == "confirm":
             # Apply the change
@@ -218,13 +230,21 @@ def handle_code_changes(changes: list[CodeChange], conversation_history: list = 
             else:
                 console.print(f"[red]✗ Failed to apply change to {change.file_path}[/red]")
 
-        elif decision == "deny":
-            console.print(f"[yellow]Skipped change to {change.file_path}[/yellow]")
+        elif decision == "confirm_all":
+            # Apply this change and all remaining changes
+            auto_confirm = True
+            if change.apply():
+                applied_changes.append(change)
+                console.print(f"[green]✓ Successfully applied change to {change.file_path}[/green]")
+            else:
+                console.print(f"[red]✗ Failed to apply change to {change.file_path}[/red]")
 
         elif decision == "adjust":
             # User wants adjustments
             console.print("\n[yellow]What adjustments would you like Sara to make?[/yellow]")
-            feedback = console.input("[bold cyan]Your feedback:[/bold cyan] ")
+            # Use a simple prompt session for this one-off input
+            feedback_session = PromptSession()
+            feedback = feedback_session.prompt("Your feedback: ", style=prompt_style)
             feedback_messages.append(f"For the change to {change.file_path}: {feedback}")
 
     # If there's feedback (either from validation failures or user requests), return it
@@ -284,10 +304,16 @@ def main(query, file, no_context, interactive):
             border_style="cyan"
         ))
 
+        # Create prompt session for line editing
+        session = PromptSession()
+
         conversation_history = []
         while True:
             try:
-                user_input = console.input("\n[bold cyan]You:[/bold cyan] ")
+                console.print()
+                # Use prompt_toolkit for proper line editing
+                user_input = session.prompt("You: ", style=prompt_style)
+
                 if user_input.lower() in ['exit', 'quit', 'q']:
                     console.print("\n[cyan]Goodbye! Happy coding! 👋[/cyan]")
                     break
